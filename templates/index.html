@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexCrypto Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3b82f6',
+            darkbg: '#0f172a',
+            darkpanel: '#1e293b',
+            darkborder: '#334155'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .scrollbar-none::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+  <!-- Navbar -->
+  <header class="border-b border-darkborder bg-darkpanel/70 backdrop-blur sticky top-0 z-30 px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">⚡</div>
+      <span class="text-xl font-bold tracking-tight text-white">Apex<span class="text-blue-500">Crypto</span></span>
+    </div>
+    <div class="flex items-center space-x-3">
+      <select id="currency-select" onchange="changeCurrency(this.value)" class="bg-darkpanel border border-darkborder rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        <option value="usd">USD ($)</option>
+        <option value="eur">EUR (€)</option>
+        <option value="gbp">GBP (£)</option>
+      </select>
+      <button onclick="fetchData()" class="text-xs bg-darkborder hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg transition">↻ Refresh</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow space-y-6">
+    <!-- Portfolio Metric Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-darkpanel border border-darkborder p-4 rounded-xl shadow-sm">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Portfolio Value</p>
+        <h3 id="stat-portfolio-val" class="text-2xl font-bold mt-1">$0.00</h3>
+      </div>
+      <div class="bg-darkpanel border border-darkborder p-4 rounded-xl shadow-sm">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Invested</p>
+        <h3 id="stat-invested" class="text-2xl font-bold mt-1">$0.00</h3>
+      </div>
+      <div class="bg-darkpanel border border-darkborder p-4 rounded-xl shadow-sm">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Return (PnL)</p>
+        <h3 id="stat-pnl" class="text-2xl font-bold mt-1 text-slate-300">$0.00</h3>
+      </div>
+      <div class="bg-darkpanel border border-darkborder p-4 rounded-xl shadow-sm">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Alerts</p>
+        <h3 id="stat-alerts" class="text-2xl font-bold mt-1 text-blue-400">0</h3>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex space-x-2 border-b border-darkborder pb-2">
+      <button id="tab-markets-btn" onclick="switchTab('markets')" class="px-4 py-2 font-medium text-sm rounded-lg bg-blue-600 text-white">Markets</button>
+      <button id="tab-portfolio-btn" onclick="switchTab('portfolio')" class="px-4 py-2 font-medium text-sm rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Portfolio</button>
+      <button id="tab-alerts-btn" onclick="switchTab('alerts')" class="px-4 py-2 font-medium text-sm rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Price Alerts</button>
+    </div>
+
+    <!-- Tab: Markets -->
+    <section id="tab-markets" class="space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-semibold">Cryptocurrency Markets</h2>
+        <input type="text" id="market-search" oninput="filterMarkets(this.value)" placeholder="Search coin or symbol..." class="bg-darkpanel border border-darkborder rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-64">
+      </div>
+      <div class="overflow-x-auto bg-darkpanel border border-darkborder rounded-xl">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider border-b border-darkborder">
+            <tr>
+              <th class="py-3 px-4">#</th>
+              <th class="py-3 px-4">Asset</th>
+              <th class="py-3 px-4 text-right">Price</th>
+              <th class="py-3 px-4 text-right">24h Change</th>
+              <th class="py-3 px-4 text-right">Market Cap</th>
+              <th class="py-3 px-4 text-center">7d Trend</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="market-table-body" class="divide-y divide-darkborder">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tab: Portfolio -->
+    <section id="tab-portfolio" class="hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-semibold">Asset Holdings</h2>
+        <button onclick="openAddHoldingModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-4 py-2 rounded-lg transition">+ Add Holding</button>
+      </div>
+      <div class="overflow-x-auto bg-darkpanel border border-darkborder rounded-xl">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider border-b border-darkborder">
+            <tr>
+              <th class="py-3 px-4">Asset</th>
+              <th class="py-3 px-4 text-right">Holdings</th>
+              <th class="py-3 px-4 text-right">Buy Price</th>
+              <th class="py-3 px-4 text-right">Current Price</th>
+              <th class="py-3 px-4 text-right">Value</th>
+              <th class="py-3 px-4 text-right">Unrealized PnL</th>
+              <th class="py-3 px-4 text-right">Remove</th>
+            </tr>
+          </thead>
+          <tbody id="portfolio-table-body" class="divide-y divide-darkborder">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tab: Alerts -->
+    <section id="tab-alerts" class="hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-semibold">Configured Price Alerts</h2>
+        <button onclick="openAddAlertModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-4 py-2 rounded-lg transition">+ Set Alert</button>
+      </div>
+      <div class="overflow-x-auto bg-darkpanel border border-darkborder rounded-xl">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider border-b border-darkborder">
+            <tr>
+              <th class="py-3 px-4">Asset</th>
+              <th class="py-3 px-4">Condition</th>
+              <th class="py-3 px-4 text-right">Target Price</th>
+              <th class="py-3 px-4 text-right">Current Price</th>
+              <th class="py-3 px-4 text-center">Status</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="alerts-table-body" class="divide-y divide-darkborder">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Add Holding -->
+  <div id="modal-holding" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+    <div class="bg-darkpanel border border-darkborder rounded-2xl w-full max-w-md p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-darkborder pb-3">
+        <h3 class="font-bold text-lg text-white">Add Portfolio Holding</h3>
+        <button onclick="closeModals()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <form id="holding-form" onsubmit="submitHolding(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Coin</label>
+          <select id="holding-coin" required class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"></select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Amount Owned</label>
+          <input type="number" step="any" min="0.00000001" id="holding-amount" required placeholder="0.5" class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Buy Price (<span class="curr-label">USD</span>)</label>
+          <input type="number" step="any" min="0.00000001" id="holding-buyprice" required placeholder="60000" class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-lg transition">Save Position</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Alert -->
+  <div id="modal-alert" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+    <div class="bg-darkpanel border border-darkborder rounded-2xl w-full max-w-md p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-darkborder pb-3">
+        <h3 class="font-bold text-lg text-white">Create Price Alert</h3>
+        <button onclick="closeModals()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <form id="alert-form" onsubmit="submitAlert(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Coin</label>
+          <select id="alert-coin" required class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"></select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Condition</label>
+          <select id="alert-condition" required class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="ABOVE">Price Goes Above (&ge;)</option>
+            <option value="BELOW">Price Goes Below (&le;)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Target Price (<span class="curr-label">USD</span>)</label>
+          <input type="number" step="any" min="0.00000001" id="alert-price" required placeholder="70000" class="w-full bg-slate-900 border border-darkborder rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-lg transition">Activate Alert</button>
+      </form>
+    </div>
+  </div>
+
+  <footer class="border-t border-darkborder text-center py-4 text-xs text-slate-500">
+    ApexCrypto &bull; Realtime Crypto Dashboard
+  </footer>
+
+  <script>
+    let state = {
+      currency: 'usd',
+      symbol: '$',
+      markets: [],
+      portfolio: null,
+      alerts: [],
+      charts: {}
+    };
+
+    const currencySymbols = { usd: '$', eur: '€', gbp: '£' };
+
+    function formatNumber(num, decimals = 2) {
+      if (num === null || num === undefined) return '0.00';
+      return Number(num).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    function switchTab(tab) {
+      ['markets', 'portfolio', 'alerts'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}-btn`);
+        if (t === tab) {
+          btn.className = 'px-4 py-2 font-medium text-sm rounded-lg bg-blue-600 text-white';
+        } else {
+          btn.className = 'px-4 py-2 font-medium text-sm rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition';
+        }
+      });
+    }
+
+    function changeCurrency(curr) {
+      state.currency = curr;
+      state.symbol = currencySymbols[curr] || '$';
+      document.querySelectorAll('.curr-label').forEach(el => el.textContent = curr.toUpperCase());
+      fetchData();
+    }
+
+    async function fetchData() {
+      try {
+        const [marketRes, portRes, alertRes] = await Promise.all([
+          fetch(`/api/markets?currency=${state.currency}`).then(r => r.json()),
+          fetch(`/api/portfolio?currency=${state.currency}`).then(r => r.json()),
+          fetch('/api/alerts').then(r => r.json())
+        ]);
+
+        state.markets = marketRes.coins || [];
+        state.portfolio = portRes;
+        state.alerts = alertRes || [];
+
+        renderMarkets(state.markets);
+        renderPortfolio();
+        renderAlerts();
+        populateCoinDropdowns();
+      } catch (err) {
+        console.error('Data load error:', err);
+      }
+    }
+
+    function renderMarkets(coins) {
+      const tbody = document.getElementById('market-table-body');
+      tbody.innerHTML = '';
+      coins.forEach((c, index) => {
+        const change24h = c.price_change_percentage_24h || 0;
+        const isPositive = change24h >= 0;
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-800/40 transition';
+        row.innerHTML = `
+          <td class="py-3 px-4 text-slate-500 font-mono">${c.market_cap_rank || index + 1}</td>
+          <td class="py-3 px-4">
+            <div class="flex items-center space-x-2.5">
+              <span class="font-semibold text-white">${c.name}</span>
+              <span class="text-xs text-slate-400 uppercase">${c.symbol}</span>
+            </div>
+          </td>
+          <td class="py-3 px-4 text-right font-medium text-white">${state.symbol}${formatNumber(c.current_price, c.current_price < 1 ? 4 : 2)}</td>
+          <td class="py-3 px-4 text-right font-medium ${isPositive ? 'text-emerald-400' : 'text-rose-400'}">
+            ${isPositive ? '+' : ''}${formatNumber(change24h, 2)}%
+          </td>
+          <td class="py-3 px-4 text-right text-slate-300">${state.symbol}${formatNumber(c.market_cap, 0)}</td>
+          <td class="py-3 px-4 w-32">
+            <canvas id="chart-${c.id}" width="100" height="30" class="mx-auto"></canvas>
+          </td>
+          <td class="py-3 px-4 text-right space-x-2">
+            <button onclick="quickAddHolding('${c.id}', '${c.symbol}', '${c.name}', ${c.current_price})" class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-2 py-1 rounded border border-slate-700">+ Hold</button>
+            <button onclick="quickAddAlert('${c.id}', '${c.symbol}', ${c.current_price})" class="text-xs bg-slate-800 hover:bg-slate-700 text-yellow-400 px-2 py-1 rounded border border-slate-700">+ Alert</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+
+        // Draw mini sparkline
+        setTimeout(() => {
+          const canvas = document.getElementById(`chart-${c.id}`);
+          if (canvas && c.sparkline_in_7d && c.sparkline_in_7d.price) {
+            const ctx = canvas.getContext('2d');
+            new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: c.sparkline_in_7d.price.map((_, i) => i),
+                datasets: [{
+                  data: c.sparkline_in_7d.price,
+                  borderColor: isPositive ? '#10b981' : '#f43f5e',
+                  borderWidth: 1.5,
+                  fill: false,
+                  tension: 0.2,
+                  pointRadius: 0
+                }]
+              },
+              options: {
+                responsive: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false } }
+              }
+            });
+          }
+        }, 50);
+      });
+    }
+
+    function filterMarkets(query) {
+      const q = query.toLowerCase().trim();
+      const filtered = state.markets.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
+      renderMarkets(filtered);
+    }
+
+    function renderPortfolio() {
+      if (!state.portfolio) return;
+      const { summary, positions } = state.portfolio;
+      document.getElementById('stat-portfolio-val').textContent = `${summary.currency_symbol}${formatNumber(summary.total_value)}`;
+      document.getElementById('stat-invested').textContent = `${summary.currency_symbol}${formatNumber(summary.total_invested)}`;
+
+      const pnlEl = document.getElementById('stat-pnl');
+      const isPos = summary.total_pnl >= 0;
+      pnlEl.className = `text-2xl font-bold mt-1 ${isPos ? 'text-emerald-400' : 'text-rose-400'}`;
+      pnlEl.textContent = `${isPos ? '+' : ''}${summary.currency_symbol}${formatNumber(summary.total_pnl)} (${summary.total_pnl_percentage}%)`;
+
+      const tbody = document.getElementById('portfolio-table-body');
+      tbody.innerHTML = '';
+      if (positions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-500">No positions recorded yet. Click '+ Add Holding' to begin!</td></tr>`;
+        return;
+      }
+
+      positions.forEach(p => {
+        const posPnl = p.pnl >= 0;
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-800/40 transition';
+        row.innerHTML = `
+          <td class="py-3 px-4 font-semibold text-white">${p.name} <span class="text-xs text-slate-400 uppercase">${p.symbol}</span></td>
+          <td class="py-3 px-4 text-right font-mono">${p.amount}</td>
+          <td class="py-3 px-4 text-right text-slate-300">${state.symbol}${formatNumber(p.buy_price)}</td>
+          <td class="py-3 px-4 text-right text-white font-medium">${state.symbol}${formatNumber(p.current_price)}</td>
+          <td class="py-3 px-4 text-right font-medium text-white">${state.symbol}${formatNumber(p.current_value)}</td>
+          <td class="py-3 px-4 text-right font-medium ${posPnl ? 'text-emerald-400' : 'text-rose-400'}">
+            ${posPnl ? '+' : ''}${state.symbol}${formatNumber(p.pnl)} (${p.pnl_percentage}%)
+          </td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="removeHolding(${p.id})" class="text-xs text-rose-400 hover:text-rose-300">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function renderAlerts() {
+      document.getElementById('stat-alerts').textContent = state.alerts.length;
+      const tbody = document.getElementById('alerts-table-body');
+      tbody.innerHTML = '';
+      if (state.alerts.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">No alerts set. Create an alert to receive threshold notices!</td></tr>`;
+        return;
+      }
+
+      state.alerts.forEach(a => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-800/40 transition';
+        row.innerHTML = `
+          <td class="py-3 px-4 font-semibold text-white uppercase">${a.symbol}</td>
+          <td class="py-3 px-4 text-slate-300 text-xs font-mono">${a.condition === 'ABOVE' ? '&ge; Greater or Equal' : '&le; Less or Equal'}</td>
+          <td class="py-3 px-4 text-right font-mono">$${formatNumber(a.target_price)}</td>
+          <td class="py-3 px-4 text-right font-mono text-slate-300">$${formatNumber(a.current_price)}</td>
+          <td class="py-3 px-4 text-center">
+            ${a.triggered 
+              ? '<span class="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400 rounded-full font-medium">TRIGGERED</span>'
+              : '<span class="px-2 py-0.5 text-xs bg-slate-700 text-slate-300 rounded-full font-medium">ACTIVE</span>'}
+          </td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="removeAlert(${a.id})" class="text-xs text-rose-400 hover:text-rose-300">Remove</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function populateCoinDropdowns() {
+      const opts = state.markets.map(c => `<option value="${c.id}" data-symbol="${c.symbol}" data-name="${c.name}" data-price="${c.current_price}">${c.name} (${c.symbol.toUpperCase()})</option>`).join('');
+      document.getElementById('holding-coin').innerHTML = opts;
+      document.getElementById('alert-coin').innerHTML = opts;
+    }
+
+    function openAddHoldingModal() {
+      document.getElementById('modal-holding').classList.remove('hidden');
+      document.getElementById('modal-holding').classList.add('flex');
+    }
+
+    function openAddAlertModal() {
+      document.getElementById('modal-alert').classList.remove('hidden');
+      document.getElementById('modal-alert').classList.add('flex');
+    }
+
+    function closeModals() {
+      ['modal-holding', 'modal-alert'].forEach(id => {
+        const m = document.getElementById(id);
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      });
+    }
+
+    function quickAddHolding(coinId, symbol, name, price) {
+      openAddHoldingModal();
+      document.getElementById('holding-coin').value = coinId;
+      document.getElementById('holding-buyprice').value = price;
+    }
+
+    function quickAddAlert(coinId, symbol, price) {
+      openAddAlertModal();
+      document.getElementById('alert-coin').value = coinId;
+      document.getElementById('alert-price').value = price;
+    }
+
+    async function submitHolding(e) {
+      e.preventDefault();
+      const sel = document.getElementById('holding-coin');
+      const opt = sel.options[sel.selectedIndex];
+      const payload = {
+        coin_id: sel.value,
+        symbol: opt.dataset.symbol,
+        name: opt.dataset.name,
+        amount: parseFloat(document.getElementById('holding-amount').value),
+        buy_price: parseFloat(document.getElementById('holding-buyprice').value)
+      };
+      await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      closeModals();
+      fetchData();
+      switchTab('portfolio');
+    }
+
+    async function removeHolding(id) {
+      if (!confirm('Are you sure you want to delete this position?')) return;
+      await fetch(`/api/portfolio/${id}`, { method: 'DELETE' });
+      fetchData();
+    }
+
+    async function submitAlert(e) {
+      e.preventDefault();
+      const sel = document.getElementById('alert-coin');
+      const opt = sel.options[sel.selectedIndex];
+      const payload = {
+        coin_id: sel.value,
+        symbol: opt.dataset.symbol,
+        target_price: parseFloat(document.getElementById('alert-price').value),
+        condition: document.getElementById('alert-condition').value
+      };
+      await fetch('/api/alerts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      closeModals();
+      fetchData();
+      switchTab('alerts');
+    }
+
+    async function removeAlert(id) {
+      await fetch(`/api/alerts/${id}`, { method: 'DELETE' });
+      fetchData();
+    }
+
+    // Auto refresh every 45s
+    setInterval(fetchData, 45000);
+    window.onload = fetchData;
+  </script>
+</body>
+</html>
